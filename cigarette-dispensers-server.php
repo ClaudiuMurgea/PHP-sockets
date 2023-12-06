@@ -4,20 +4,27 @@ header("Content-type: application/json; charset=utf-8");
 // -initial-                                    : {"MAC_ID":"08:3A:8D:15:12:BC", "Status":"scanning"}
 // -accepted & entering activity check-         : {"MAC_ID":"08:3A:8D:15:12:BC", "Status":"online"}
 
-// Transaction tests
-// -init-                                       : {"MAC_ID":"08:3A:8D:15:12:BC", "Timestamp":"123456", "Status":"init", "CARD_ID":"511572075"}
-// -processing-                                 : {"MAC_ID":"08:3A:8D:15:12:BC", "Timestamp":"123456", "Status":"processing"}
-// -success-                                    : {"MAC_ID":"08:3A:8D:15:12:BC", "Timestamp":"123456", "Status":"success"}
-// -fail-                                       : {"MAC_ID":"08:3A:8D:15:12:BC", "Timestamp":"123456", "Status":"fail"}
+// -initial-                                    : {"MAC_ID":"09:3B:8D:15:12:BC", "Status":"scanning"}
+// -accepted-                                   : {"MAC_ID":"09:3B:8D:15:12:BC", "Status":"online"}
 
-// -init-                                       : {"MAC_ID":"09:3B:8D:15:12:BC", "Timestamp":"123456", "Status":"init", "CARD_ID":"511572075"}
-// -processing-                                 : {"MAC_ID":"09:3B:8D:15:12:BC", "Timestamp":"123456", "Status":"processing"}
-// -success-                                    : {"MAC_ID":"09:3B:8D:15:12:BC", "Timestamp":"123456", "Status":"success"}
-// -fail-                                       : {"MAC_ID":"09:3B:8D:15:12:BC", "Timestamp":"123456", "Status":"fail"}
+// Transaction tests
+// -init-  with product                         : {"MAC_ID":"08:3A:8D:15:12:BC", "Oper_ID":"123456", "Status":"init", "CARD_ID":"511572075"}
+// -init-  no product recieve fail when no product , on init 
+// -processing-                                 : {"MAC_ID":"08:3A:8D:15:12:BC", "Oper_ID":"123456", "Status":"processing"}
+// -success-                                    : {"MAC_ID":"08:3A:8D:15:12:BC", "Oper_ID":"123456", "Status":"success"}
+// -fail-                                       : {"MAC_ID":"08:3A:8D:15:12:BC", "Oper_ID":"123456", "Status":"fail"}
+
+// -init-                                       : {"MAC_ID":"09:3B:8D:15:12:BC", "Oper_ID":"123456", "Status":"init", "Card_ID":"511572075"}
+// -processing-                                 : {"MAC_ID":"09:3B:8D:15:12:BC", "Oper_ID":"123456", "Status":"processing"}
+// -success-                                    : {"MAC_ID":"09:3B:8D:15:12:BC", "Oper_ID":"123456", "Status":"success"}
+// -fail-                                       : {"MAC_ID":"09:3B:8D:15:12:BC", "Oper_ID":"123456", "Status":"fail"}
 
 // SOCKETS LOGIC
-$host                   = "127.0.0.1";
-$port                   = 1111;
+
+$ip = shell_exec("hostname -I | awk '{ print $1 }'");
+$ip = substr_replace($ip ,"",-1);
+$host                   = $ip;
+$port                   = 2222;
 $null                   = NULL;
 
 if(($sock = socket_create(AF_INET, SOCK_STREAM, SOL_TCP)) === false) {
@@ -44,7 +51,7 @@ ob_implicit_flush();
 $username                   = "app";
 $password                   = "sau03magen";
 $database                   = "";
-$master_host                = "10.109.254.38";
+$master_host                = "";
 
 $mac_verification           = false;
 $command                    = false;
@@ -129,7 +136,6 @@ while(true) {
         $sock_index = array_search($sock, $reads);
         unset($reads[$sock_index]);
       }
-
       foreach($reads as $deviceOrder => $device) {
         if(($data = socket_read($device, 4096)) === false) {
             echo "Socket read error: ".socket_strerror(socket_last_error($msgsock)) . "\n";
@@ -144,6 +150,7 @@ while(true) {
                                                                                     // }
             //respond back to the same person who sent message to the server
             if(str_contains($data, "{")){ 
+
                 $jsToArray = json_decode($data, true);
                 echo "\n\n-----------------------------------------------------------------------";
                 echo "\n-------------------------------- START --------------------------------\n";
@@ -174,9 +181,9 @@ while(true) {
                         // sending standard message with status depending on the customer card points
                         $dataForClient['Mac']       = $mac;
 
-                        if(isset($jsToArray['Timestamp'])) {
-                            $transactionId = $jsToArray['Timestamp'];
-                            $dataForClient['Timestamp'] = $transactionId;
+                        if(isset($jsToArray['Oper_ID'])) {
+                            $transactionId = $jsToArray['Oper_ID'];
+                            $dataForClient['Oper_ID'] = $transactionId;
                         }
 
                         if($assigned == "true" && ( isset($jsToArray["Status"]) && ( $jsToArray["Status"] == 'scanning') || $jsToArray["Status"] == 'online' ) ) {
@@ -270,10 +277,16 @@ while(true) {
                                 socket_write($device, $dataForClient, strlen($dataForClient));
                                 if(isset($storedTransactions[$deviceOrder])) {
                                     $storedTransactions[$deviceOrder]->status = "processing";
+
+
+
                                     $transaction_mac            = $storedTransactions[$deviceOrder]->mac;
                                     $transaction_operation_id   = $storedTransactions[$deviceOrder]->operationId;
                                     $transaction_status         = $storedTransactions[$deviceOrder]->status;
                                     $transaction_card_id        = $storedTransactions[$deviceOrder]->cardId;
+
+
+
                                     $insert_log = Q($localConnection,"INSERT IGNORE INTO WineDispenser.`cigarette_dispensers_transactions`(`Mac`, `OperationId`, `Status`, `CardId`) 
                                     VALUES ('$transaction_mac', '$transaction_operation_id', '$transaction_status', '$transaction_card_id');"); 
                                 }
@@ -285,6 +298,7 @@ while(true) {
                                     $transaction_operation_id   = $storedTransactions[$deviceOrder]->operationId;
                                     $transaction_status         = $storedTransactions[$deviceOrder]->status;
                                     $transaction_card_id        = $storedTransactions[$deviceOrder]->cardId;
+
                                     $insert_log = Q($localConnection,"INSERT IGNORE INTO WineDispenser.`cigarette_dispensers_transactions`(`Mac`, `OperationId`, `Status`, `CardId`) 
                                     VALUES ('$transaction_mac', '$transaction_operation_id', '$transaction_status', '$transaction_card_id');");
                                     $extract_points = Q($localConnection,"CALL `PlayerTracking`.`AddRemovePlayerPoints`('$productPrice', '$customerId', 'Remove','');");
